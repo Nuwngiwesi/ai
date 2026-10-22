@@ -6,7 +6,7 @@
  * Environment variables:
  *   GEMINI_API_KEY    (required) Google AI Studio key
  *   GEMINI_MODEL      (optional) default: gemini-2.5-flash
- *   BRAVE_API_KEY     (optional) enables POST /api/search via Brave Search API
+ *   BRAVE_API_KEY     (optional) use Brave for POST /api/search; otherwise Gemini Google Search is used
  *   SYSTEM_PROMPT     (optional) replaces the built-in LYNKO AI personality
  *   CORS_ORIGIN       (optional) one extra allowed origin; same-origin works by default
  *   RATE_LIMIT_PER_MIN, GEMINI_TIMEOUT_MS, PORT (optional)
@@ -125,7 +125,7 @@ app.get('/api/health', (req, res) => {
   res.json({
     ok: true,
     ai: { configured: Boolean(GEMINI_API_KEY), provider: 'gemini', model: GEMINI_MODEL },
-    search: { configured: Boolean(BRAVE_API_KEY), provider: BRAVE_API_KEY ? 'brave' : null },
+    search: { configured: Boolean(BRAVE_API_KEY || GEMINI_API_KEY), provider: BRAVE_API_KEY ? 'brave' : (GEMINI_API_KEY ? 'gemini-google-search' : null) },
     uptimeSeconds: Math.round(process.uptime())
   });
 });
@@ -207,36 +207,82 @@ app.post('/api/chat', async (req, res) => {
 });
 
 app.post('/api/search', async (req, res) => {
-  if (!BRAVE_API_KEY) {
+  if (!BRAVE_API_KEY && !GEMINI_API_KEY) {
     return res.status(501).json({
-      error: 'Web search is not configured. Set BRAVE_API_KEY (Brave Search API) on the server to enable it. Google search commands still open in your browser.',
+      error: 'Web search is not configured. Set GEMINI_API_KEY (Google Search grounding) or BRAVE_API_KEY on the server. Google search commands still open in your browser.',
       code: 'search_not_configured'
     });
   }
   const query = cleanText(req.body && req.body.query, MAX_QUERY_CHARS);
   if (!query) return res.status(400).json({ error: 'Provide a non-empty "query" string.', code: 'bad_request' });
+
+  // Option 1: Brave Search API (if a key is set)
+  if (BRAVE_API_KEY) {
+    try {
+      const r = await fetchWithTimeout(
+        'https://api.search.brave.com/res/v1/web/search?count=5&q=' + encodeURIComponent(query),
+        { headers: { Accept: 'application/json', 'X-Subscription-Token': BRAVE_API_KEY } },
+        10000
+      );
+      if (!r.ok) {
+        return res.status(r.status === 429 ? 429 : 502).json({
+          error: r.status === 429 ? 'Search API limit reached.' : `Search provider error (${r.status}).`,
+          code: 'search_error'
+        });
+      }
+      const data = await r.json();
+      const results = ((data.web && data.web.results) || []).slice(0, 5).map(x => ({
+        title: cleanText(x.title, 200),
+        url: cleanText(x.url, 500),
+        description: cleanText(String(x.description || '').replace(/<[^>]*>/g, ''), 300)
+      }));
+      return res.json({ query, provider: 'brave', results });
+    } catch (err) {
+      if (err && err.name === 'AbortError') return res.status(504).json({ error: 'Search timed out.', code: 'timeout' });
+      return res.status(502).json({ error: 'Could not reach the search provider.', code: 'network' });
+    }
+  }
+
+  // Option 2: Gemini with Google Search grounding (no extra key needed)
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(GEMINI_MODEL)}:generateContent`;
   try {
-    const r = await fetchWithTimeout(
-      'https://api.search.brave.com/res/v1/web/search?count=5&q=' + encodeURIComponent(query),
-      { headers: { Accept: 'application/json', 'X-Subscription-Token': BRAVE_API_KEY } },
-      10000
-    );
+    const r = await fetchWithTimeout(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'x-goog-api-key': GEMINI_API_KEY },
+      body: JSON.stringify({
+        systemInstruction: { parts: [{ text: 'Answer using current web results. Be short and factual. Reply in the same language style as the question (Sinhala, Singlish or English).' }] },
+        contents: [{ role: 'user', parts: [{ text: query }] }],
+        tools: [{ google_search: {} }],
+        generationConfig: { temperature: 0.3, maxOutputTokens: 800 }
+      })
+    }, 30000);
+    const data = await r.json().catch(() => ({}));
     if (!r.ok) {
+      const detail = cleanText(data && data.error && data.error.message, 200);
       return res.status(r.status === 429 ? 429 : 502).json({
-        error: r.status === 429 ? 'Search API limit reached.' : `Search provider error (${r.status}).`,
+        error: r.status === 429 ? 'Gemini API limit reached. Try again later.' : `Gemini search failed (${r.status}). ${detail}`.trim(),
         code: 'search_error'
       });
     }
-    const data = await r.json();
-    const results = ((data.web && data.web.results) || []).slice(0, 5).map(x => ({
-      title: cleanText(x.title, 200),
-      url: cleanText(x.url, 500),
-      description: cleanText(String(x.description || '').replace(/<[^>]*>/g, ''), 300)
-    }));
-    res.json({ query, results });
+    const cand = data.candidates && data.candidates[0];
+    const answer = cand && cand.content && Array.isArray(cand.content.parts)
+      ? cand.content.parts.map(p => (typeof p.text === 'string' ? p.text : '')).join('').trim() : '';
+    const chunks = (cand && cand.groundingMetadata && cand.groundingMetadata.groundingChunks) || [];
+    const seen = new Set();
+    const results = [];
+    for (const c of chunks) {
+      const w = c && c.web;
+      if (!w || !w.uri || seen.has(w.uri)) continue;
+      seen.add(w.uri);
+      results.push({ title: cleanText(w.title, 200), url: cleanText(w.uri, 800), description: '' });
+      if (results.length >= 5) break;
+    }
+    if (!answer) return res.status(422).json({ error: 'Search returned no answer. Try rephrasing.', code: 'empty_reply' });
+    res.json({ query, provider: 'gemini-google-search', answer, results });
   } catch (err) {
     if (err && err.name === 'AbortError') return res.status(504).json({ error: 'Search timed out.', code: 'timeout' });
-    res.status(502).json({ error: 'Could not reach the search provider.', code: 'network' });
+    console.error('search error:', err && err.message);
+    res.status(502).json({ error: 'Could not reach the Gemini API for search.', code: 'network' });
   }
 });
 
@@ -253,5 +299,5 @@ app.use((err, req, res, next) => { // eslint-disable-line no-unused-vars
 app.listen(PORT, HOST, () => {
   console.log(`LYNKO AI listening on http://${HOST}:${PORT}`);
   console.log(`Gemini: ${GEMINI_API_KEY ? 'configured (' + GEMINI_MODEL + ')' : 'NOT configured, set GEMINI_API_KEY'}`);
-  console.log(`Search: ${BRAVE_API_KEY ? 'configured (brave)' : 'not configured'}`);
+  console.log(`Search: ${BRAVE_API_KEY ? 'brave' : (GEMINI_API_KEY ? 'gemini google search' : 'not configured')}`);
 });
