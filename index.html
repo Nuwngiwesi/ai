@@ -1,0 +1,564 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#040a1c">
+<title>LYNKO AI</title>
+<style>
+:root{--bg:#040a1c;--bg2:#081433;--blue:#2e8bff;--cyan:#27d3ff;--text:#e6f0ff;--mute:#8aa0c8;--card:rgba(16,32,72,.55);--line:rgba(80,150,255,.28);--err:#ff6b8a;--ok:#35e0a1;--warn:#ffc857}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;height:100%}
+body{display:flex;flex-direction:column;height:100dvh;color:var(--text);background:radial-gradient(900px 500px at 50% -10%,#10296b 0%,var(--bg2) 45%,var(--bg) 100%);font:16px/1.45 system-ui,-apple-system,"Segoe UI",Roboto,"Noto Sans Sinhala","Iskoola Pota",sans-serif;overflow:hidden;padding:env(safe-area-inset-top) 0 env(safe-area-inset-bottom)}
+button,textarea,select,input{font:inherit;color:inherit}
+button{cursor:pointer}
+:focus-visible{outline:2px solid var(--cyan);outline-offset:2px}
+header{display:flex;align-items:center;justify-content:space-between;padding:10px 14px;gap:8px}
+.brand{display:flex;align-items:center;gap:10px;min-width:0}
+.logo{width:38px;height:38px;border-radius:12px;display:grid;place-items:center;font-weight:800;font-size:20px;background:linear-gradient(135deg,var(--blue),var(--cyan));color:#031030;box-shadow:0 0 18px #2e8bff88}
+.brand b{display:block;font-size:18px;letter-spacing:.14em;text-shadow:0 0 12px #2e8bffaa}
+.brand small{display:block;color:var(--mute);font-size:12px;margin-top:-2px}
+.hbtns{display:flex;gap:6px}
+.ib{width:40px;height:40px;border-radius:12px;border:1px solid var(--line);background:var(--card);display:grid;place-items:center;backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px)}
+.ib svg{width:20px;height:20px;fill:none;stroke:var(--cyan);stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+.ib:active{transform:scale(.94)}
+#stage{display:flex;flex-direction:column;align-items:center;padding:2px 14px 6px}
+#status{font-size:12px;padding:3px 10px;border-radius:99px;border:1px solid var(--line);background:var(--card);color:var(--mute);display:flex;align-items:center;gap:6px;margin-bottom:6px}
+#status i{width:8px;height:8px;border-radius:50%;background:var(--mute)}
+#status.ok i{background:var(--ok);box-shadow:0 0 8px var(--ok)}
+#status.warn i{background:var(--warn)}
+#status.bad i{background:var(--err)}
+.orb{position:relative;width:132px;height:132px}
+.ring{position:absolute;inset:0;border-radius:50%;border:1.5px solid var(--cyan);opacity:.35}
+.core{position:absolute;inset:18px;border-radius:50%;background:radial-gradient(circle at 35% 30%,#c6edff,var(--blue) 45%,#0a2a7a 82%);box-shadow:0 0 36px #2e8bff99,0 0 80px #27d3ff44;animation:breathe 5s ease-in-out infinite;transition:filter .3s}
+#stage.voice .core{filter:brightness(1.3)}
+body[data-state=listening] .ring{animation:ping 1.6s ease-out infinite}
+body[data-state=listening] .r2{animation-delay:.8s}
+body[data-state=thinking] .r1{border-style:dashed;opacity:.8;animation:spin 1.2s linear infinite}
+body[data-state=thinking] .core{filter:hue-rotate(35deg)}
+body[data-state=speaking] .core{animation:talk .55s ease-in-out infinite alternate}
+.waves{display:flex;gap:4px;align-items:center;height:22px;margin-top:6px;opacity:0;transition:opacity .25s}
+body[data-state=listening] .waves,body[data-state=speaking] .waves{opacity:1}
+.waves span{width:4px;height:6px;border-radius:3px;background:linear-gradient(var(--cyan),var(--blue));animation:wave .9s ease-in-out infinite}
+.waves span:nth-child(2n){animation-delay:.15s}.waves span:nth-child(3n){animation-delay:.3s}.waves span:nth-child(5n){animation-delay:.45s}
+#stateLabel{font-size:13px;color:var(--cyan);min-height:18px}
+#interim{font-size:14px;color:var(--mute);min-height:20px;max-width:100%;text-align:center;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+@keyframes breathe{50%{transform:scale(1.05)}}
+@keyframes ping{0%{transform:scale(.85);opacity:.7}100%{transform:scale(1.3);opacity:0}}
+@keyframes spin{to{transform:rotate(360deg)}}
+@keyframes talk{from{transform:scale(.96)}to{transform:scale(1.1)}}
+@keyframes wave{50%{height:20px}}
+@keyframes dots{0%,80%,100%{opacity:.25}40%{opacity:1}}
+#chat{flex:1;overflow-y:auto;padding:8px 14px;display:flex;flex-direction:column;gap:10px;scroll-behavior:smooth}
+.msg{display:flex}.msg.user{justify-content:flex-end}
+.bubble{max-width:86%;padding:10px 13px;border-radius:16px;border:1px solid var(--line);background:var(--card);backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);word-break:break-word}
+.user .bubble{background:linear-gradient(135deg,#1c58d8,#1790d8);border-color:transparent;border-bottom-right-radius:4px}
+.assistant .bubble{border-bottom-left-radius:4px}
+.sys .bubble{border-style:dashed;color:var(--mute);font-size:14px}
+.error .bubble{border-color:var(--err);color:#ffd3dc;background:rgba(255,107,138,.1)}
+.txt{white-space:pre-wrap}
+.txt+pre,pre+.txt,.txt+.txt{margin-top:8px}
+pre{margin:0;padding:10px;border-radius:10px;background:#020816;border:1px solid var(--line);overflow-x:auto;font:13px/1.4 ui-monospace,Menlo,Consolas,monospace}
+.typing span{display:inline-block;width:7px;height:7px;margin:0 2px;border-radius:50%;background:var(--cyan);animation:dots 1.2s infinite}
+.typing span:nth-child(2){animation-delay:.2s}.typing span:nth-child(3){animation-delay:.4s}
+#empty{margin:auto;text-align:center;color:var(--mute);padding:10px}
+#empty h2{margin:0 0 4px;color:var(--text);font-size:19px}
+.chips{display:flex;flex-wrap:wrap;gap:8px;justify-content:center;margin-top:12px}
+.chip{border:1px solid var(--line);background:var(--card);border-radius:99px;padding:7px 12px;font-size:13px}
+.chip:active{background:rgba(46,139,255,.3)}
+#actions{padding:0 14px;display:flex;flex-direction:column;gap:8px;max-height:34vh;overflow-y:auto}
+.card{border:1px solid var(--cyan);background:rgba(8,24,64,.85);border-radius:14px;padding:10px 12px;box-shadow:0 0 18px #27d3ff33}
+.card p{margin:2px 0 8px;color:var(--mute);font-size:14px;word-break:break-word}
+.card .row{display:flex;gap:8px;flex-wrap:wrap}
+.btn{border:1px solid var(--line);background:var(--card);border-radius:10px;padding:8px 14px}
+.btn.primary{background:linear-gradient(135deg,var(--blue),var(--cyan));color:#031030;font-weight:700;border:0}
+.card input{width:100%;padding:8px 10px;border-radius:10px;border:1px solid var(--line);background:#020816;margin-bottom:8px}
+#composer{display:flex;align-items:flex-end;gap:8px;padding:8px 12px 12px}
+#mic{width:52px;height:52px;flex:none;border-radius:50%;border:0;display:grid;place-items:center;background:linear-gradient(135deg,var(--blue),var(--cyan));box-shadow:0 0 20px #2e8bffaa}
+#mic svg{width:24px;height:24px;fill:none;stroke:#031030;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+body[data-state=listening] #mic{background:linear-gradient(135deg,#ff4d7d,#ff8a5c);box-shadow:0 0 22px #ff4d7daa}
+#text{flex:1;min-width:0;resize:none;max-height:110px;padding:13px 14px;border-radius:18px;border:1px solid var(--line);background:var(--card);line-height:1.3}
+#text::placeholder{color:var(--mute)}
+#send:disabled{opacity:.4}
+#overlay{position:fixed;inset:0;background:rgba(2,6,20,.6);opacity:0;pointer-events:none;transition:opacity .2s;z-index:10}
+#overlay.on{opacity:1;pointer-events:auto}
+.drawer{position:fixed;top:0;right:0;bottom:0;width:min(400px,92vw);z-index:11;background:#071230;border-left:1px solid var(--line);padding:calc(14px + env(safe-area-inset-top)) 16px 16px;transform:translateX(105%);transition:transform .25s;overflow-y:auto;visibility:hidden}
+.drawer.on{transform:none;visibility:visible}
+.drawer h3{margin:0 0 12px;display:flex;justify-content:space-between;align-items:center}
+.drawer label{display:block;margin:12px 0 4px;color:var(--mute);font-size:13px}
+.drawer select,.drawer textarea,.drawer input[type=text]{width:100%;padding:9px 10px;border-radius:10px;border:1px solid var(--line);background:#020816}
+.drawer input[type=range]{width:100%;accent-color:var(--blue)}
+.drawer .chk{display:flex;align-items:center;gap:10px;margin-top:14px;color:var(--text);font-size:15px}
+.list{display:flex;flex-direction:column;gap:8px}
+.list .btn{text-align:left;width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.note{border:1px solid var(--line);border-radius:12px;padding:8px;background:var(--card)}
+.note textarea{min-height:80px;margin-bottom:6px}
+.hint{color:var(--mute);font-size:13px;margin:6px 0}
+#toast{position:fixed;left:50%;bottom:90px;transform:translate(-50%,20px);background:#0c2358;border:1px solid var(--cyan);padding:9px 14px;border-radius:12px;opacity:0;pointer-events:none;transition:.25s;z-index:20;max-width:90vw;font-size:14px}
+#toast.on{opacity:1;transform:translate(-50%,0)}
+@media(min-width:760px){#chat,#actions,#composer{width:min(760px,100%);align-self:center}.orb{width:160px;height:160px}}
+@media(prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+</style>
+</head>
+<body data-state="idle">
+<header>
+  <div class="brand"><div class="logo">L</div><div><b>LYNKO AI</b><small>Created by Nethum Akash</small></div></div>
+  <div class="hbtns">
+    <button class="ib" id="bHistory" aria-label="Chat history"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg></button>
+    <button class="ib" id="bNotes" aria-label="Notes"><svg viewBox="0 0 24 24"><path d="M5 4h14v16H5z"/><path d="M8 9h8M8 13h8M8 17h5"/></svg></button>
+    <button class="ib" id="bSettings" aria-label="Settings"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3M4.9 4.9l2.1 2.1M17 17l2.1 2.1M4.9 19.1L7 17M17 7l2.1-2.1"/></svg></button>
+    <button class="ib" id="bClear" aria-label="Clear chat"><svg viewBox="0 0 24 24"><path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13"/></svg></button>
+  </div>
+</header>
+
+<section id="stage">
+  <div id="status"><i></i><span>Checking server…</span></div>
+  <div class="orb"><i class="ring r1"></i><i class="ring r2"></i><div class="core"></div></div>
+  <div class="waves" aria-hidden="true"><span></span><span></span><span></span><span></span><span></span><span></span><span></span></div>
+  <div id="stateLabel">Ready</div>
+  <div id="interim"></div>
+</section>
+
+<main id="chat" aria-live="polite">
+  <div id="empty">
+    <h2>Ayubowan! Mama LYNKO AI</h2>
+    <div>Tap the mic or type. Sinhala, Singlish and English all work.</div>
+    <div class="chips" id="chips"></div>
+  </div>
+</main>
+
+<div id="actions"></div>
+
+<div id="composer">
+  <button id="mic" aria-label="Start or stop listening"><svg viewBox="0 0 24 24"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0014 0M12 18v3"/></svg></button>
+  <textarea id="text" rows="1" placeholder="Type or tap the mic…" aria-label="Message"></textarea>
+  <button class="ib" id="send" aria-label="Send message" style="width:46px;height:46px"><svg viewBox="0 0 24 24"><path d="M4 12l16-8-6 16-2-7z"/></svg></button>
+  <button class="ib" id="stopSpeak" aria-label="Stop speaking" style="width:46px;height:46px"><svg viewBox="0 0 24 24"><path d="M5 9v6h4l5 4V5L9 9z"/><path d="M17 9l4 6M21 9l-4 6"/></svg></button>
+</div>
+
+<div id="overlay"></div>
+
+<aside class="drawer" id="dSettings" aria-label="Settings">
+  <h3>Settings <button class="btn" data-close>Close</button></h3>
+  <label for="sLang">Speech recognition language</label>
+  <select id="sLang">
+    <option value="si-LK">Sinhala (si-LK)</option>
+    <option value="en-US">English (US)</option>
+    <option value="en-GB">English (UK)</option>
+    <option value="en-IN">English (India)</option>
+    <option value="ta-IN">Tamil (India)</option>
+    <option value="hi-IN">Hindi (India)</option>
+  </select>
+  <label for="sVoice">Speaking voice</label>
+  <select id="sVoice"></select>
+  <div class="hint" id="voiceHint"></div>
+  <label for="sRate">Speech speed: <span id="rateVal">1.0</span>x</label>
+  <input type="range" id="sRate" min="0.6" max="1.6" step="0.1">
+  <label class="chk"><input type="checkbox" id="sAuto"> Speak AI replies aloud</label>
+  <label for="sPrompt">Extra instructions for LYNKO AI</label>
+  <textarea id="sPrompt" rows="4" maxlength="1000" placeholder="Example: Always answer in Singlish and keep it under 3 sentences."></textarea>
+  <div class="hint">These are added to the built-in LYNKO AI personality on the server.</div>
+  <div class="row" style="display:flex;gap:8px;margin-top:10px"><button class="btn" id="sTest">Test voice</button><button class="btn" id="sReset">Reset prompt</button></div>
+  <div class="hint" id="sInfo" style="margin-top:14px"></div>
+</aside>
+
+<aside class="drawer" id="dHistory" aria-label="Chat history">
+  <h3>History <button class="btn" data-close>Close</button></h3>
+  <div class="hint">Your messages in this session. Tap one to ask it again.</div>
+  <div class="list" id="histList"></div>
+</aside>
+
+<aside class="drawer" id="dNotes" aria-label="Notes">
+  <h3>Notes <button class="btn" data-close>Close</button></h3>
+  <button class="btn primary" id="newNote" style="margin-bottom:10px">New note</button>
+  <div class="list" id="noteList"></div>
+</aside>
+
+<div id="toast" role="status"></div>
+
+<script>
+(() => {
+'use strict';
+const $ = id => document.getElementById(id);
+const store = area => ({
+  get(k, d) { try { const v = area.getItem(k); return v == null ? d : JSON.parse(v); } catch (e) { return d; } },
+  set(k, v) { try { area.setItem(k, JSON.stringify(v)); } catch (e) { /* storage unavailable */ } }
+});
+const LS = store(window.localStorage), SS = store(window.sessionStorage);
+const el = (tag, cls, text) => { const n = document.createElement(tag); if (cls) n.className = cls; if (text != null) n.textContent = text; return n; };
+
+const settings = Object.assign({ lang: 'si-LK', voice: '', rate: 1, auto: true, prompt: '' }, LS.get('lynko.settings', {}));
+let messages = SS.get('lynko.messages', []);
+let notes = LS.get('lynko.notes', []);
+let health = null, busy = false, listening = false, speaking = false;
+
+// ---------- state ----------
+const LABELS = { idle: 'Ready', listening: 'Listening…', thinking: 'Thinking…', speaking: 'Speaking…' };
+function refresh() {
+  const s = busy ? 'thinking' : speaking ? 'speaking' : listening ? 'listening' : 'idle';
+  document.body.dataset.state = s;
+  $('stateLabel').textContent = LABELS[s];
+  $('send').disabled = busy;
+}
+let toastTimer;
+function toast(msg) {
+  const t = $('toast'); t.textContent = msg; t.classList.add('on');
+  clearTimeout(toastTimer); toastTimer = setTimeout(() => t.classList.remove('on'), 3200);
+}
+
+// ---------- chat rendering (textContent only, so no XSS) ----------
+function renderRich(box, text) {
+  text.split('```').forEach((p, i) => {
+    if (i % 2) {
+      const pre = el('pre'), code = el('code');
+      code.textContent = p.replace(/^[a-zA-Z0-9+#_-]*\n/, '').replace(/\n$/, '');
+      pre.appendChild(code); box.appendChild(pre);
+    } else if (p.trim()) box.appendChild(el('div', 'txt', p.trim()));
+  });
+}
+function addBubble(kind, text) {
+  $('empty').style.display = 'none';
+  const row = el('div', 'msg ' + kind), b = el('div', 'bubble');
+  renderRich(b, text); row.appendChild(b); $('chat').appendChild(row);
+  $('chat').scrollTop = $('chat').scrollHeight;
+  return row;
+}
+const addSys = t => addBubble('sys', t);
+function addTyping() {
+  $('empty').style.display = 'none';
+  const row = el('div', 'msg assistant'), b = el('div', 'bubble typing');
+  b.setAttribute('aria-label', 'LYNKO AI is typing');
+  for (let i = 0; i < 3; i++) b.appendChild(el('span'));
+  row.appendChild(b); $('chat').appendChild(row); $('chat').scrollTop = $('chat').scrollHeight;
+  return row;
+}
+const persist = () => SS.set('lynko.messages', messages.slice(-60));
+
+// ---------- speech synthesis ----------
+const synth = window.speechSynthesis;
+let voices = [], speakToken = 0, siWarned = false;
+function loadVoices() {
+  if (!synth) { $('voiceHint').textContent = 'Speech output is not supported in this browser.'; return; }
+  voices = synth.getVoices();
+  const sel = $('sVoice'); sel.textContent = '';
+  const auto = el('option', null, 'Auto (match reply language)'); auto.value = ''; sel.appendChild(auto);
+  voices.forEach(v => { const o = el('option', null, v.name + ' (' + v.lang + ')'); o.value = v.voiceURI; sel.appendChild(o); });
+  sel.value = settings.voice;
+  if (sel.value !== settings.voice) sel.value = '';
+  $('voiceHint').textContent = voices.length ? '' : 'No voices reported yet. Install a text-to-speech engine in Android settings if replies stay silent.';
+}
+if (synth) { loadVoices(); synth.onvoiceschanged = loadVoices; }
+
+function speak(text) {
+  if (!synth || !text) return;
+  stopSpeak();
+  const clean = text.replace(/```[\s\S]*?```/g, ' code block. ').replace(/https?:\/\/\S+/g, ' link ').replace(/[*_`#>~]/g, '');
+  const pieces = clean.match(/[^.!?\u0DF4\n]+[.!?\u0DF4]?/g) || [clean];
+  const chunks = []; let cur = '';
+  pieces.forEach(p => { if ((cur + p).length > 170 && cur) { chunks.push(cur); cur = p; } else cur += p; });
+  if (cur.trim()) chunks.push(cur);
+  const token = ++speakToken; let i = 0;
+  const next = () => {
+    if (token !== speakToken) return;
+    if (i >= chunks.length) { speaking = false; refresh(); return; }
+    const chunk = chunks[i++].trim();
+    if (!chunk) return next();
+    const isSi = /[\u0D80-\u0DFF]/.test(chunk);
+    let v = settings.voice ? voices.find(x => x.voiceURI === settings.voice) : null;
+    if (!v) v = voices.find(x => (isSi ? /^si/i : /^en/i).test(x.lang));
+    if (isSi && !v && !siWarned) { siWarned = true; toast('No Sinhala voice found on this device. Install one in your system text-to-speech settings.'); }
+    const u = new SpeechSynthesisUtterance(chunk);
+    if (v) { u.voice = v; u.lang = v.lang; } else u.lang = isSi ? 'si-LK' : 'en-US';
+    u.rate = Number(settings.rate) || 1;
+    u.onstart = () => { speaking = true; refresh(); };
+    u.onend = next;
+    u.onerror = e => { if (token === speakToken && e.error !== 'canceled' && e.error !== 'interrupted') { speaking = false; refresh(); } };
+    synth.speak(u);
+  };
+  next();
+}
+function stopSpeak() { speakToken++; if (synth) synth.cancel(); speaking = false; refresh(); }
+
+// ---------- speech recognition ----------
+const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+let rec = null;
+function startListening() {
+  if (!SR) { addSys('Voice input is not supported in this browser. Use Chrome on Android, or type your message below.'); $('text').focus(); return; }
+  if (!window.isSecureContext) { addSys('Voice input needs a secure (HTTPS) page. Open the deployed https:// link or localhost.'); return; }
+  stopSpeak();
+  rec = new SR(); rec.lang = settings.lang; rec.interimResults = true; rec.continuous = false; rec.maxAlternatives = 1;
+  let finalText = '';
+  rec.onstart = () => { listening = true; refresh(); };
+  rec.onspeechstart = () => $('stage').classList.add('voice');
+  rec.onspeechend = () => $('stage').classList.remove('voice');
+  rec.onresult = e => {
+    let interim = '';
+    for (let i = e.resultIndex; i < e.results.length; i++) {
+      const r = e.results[i];
+      if (r.isFinal) finalText += r[0].transcript; else interim += r[0].transcript;
+    }
+    $('interim').textContent = finalText + interim;
+  };
+  rec.onerror = e => {
+    const m = {
+      'not-allowed': 'Microphone permission was denied. Allow the microphone for this site in your browser settings, then tap the mic again.',
+      'service-not-allowed': 'Speech recognition is blocked on this browser or device. Type your message instead.',
+      'no-speech': 'I did not hear anything. Tap the mic and try again.',
+      'audio-capture': 'No microphone was found or it is in use by another app.',
+      'network': 'Speech recognition needs an internet connection.',
+      'language-not-supported': 'This browser does not support the selected recognition language. Pick another in Settings.'
+    }[e.error];
+    if (m) addSys(m); else if (e.error !== 'aborted') addSys('Voice input error: ' + e.error);
+  };
+  rec.onend = () => {
+    listening = false; $('stage').classList.remove('voice'); $('interim').textContent = ''; refresh();
+    const t = finalText.trim(); if (t) handleInput(t);
+  };
+  try { rec.start(); } catch (err) { addSys('Could not start the microphone. Try again.'); }
+}
+function toggleMic() { if (listening && rec) rec.stop(); else startListening(); }
+
+// ---------- AI calls ----------
+async function api(path, body, ms) {
+  const ctrl = new AbortController(), timer = setTimeout(() => ctrl.abort(), ms || 35000);
+  try {
+    const r = await fetch(path, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body), signal: ctrl.signal });
+    let j = {}; try { j = await r.json(); } catch (e) { /* non-JSON */ }
+    if (!r.ok) throw new Error(j.error || ('Server error ' + r.status));
+    return j;
+  } catch (e) {
+    if (e.name === 'AbortError') throw new Error('The request timed out. Please try again.');
+    if (e instanceof TypeError) throw new Error('Cannot reach the LYNKO AI server. Check your connection.');
+    throw e;
+  } finally { clearTimeout(timer); }
+}
+async function askAI() {
+  busy = true; refresh();
+  const typing = addTyping();
+  try {
+    const j = await api('/api/chat', { messages: messages.slice(-20), systemPrompt: settings.prompt });
+    typing.remove();
+    messages.push({ role: 'assistant', content: j.reply }); persist();
+    addBubble('assistant', j.reply);
+    if (settings.auto) speak(j.reply);
+  } catch (e) { typing.remove(); addBubble('error', e.message); }
+  finally { busy = false; refresh(); }
+}
+async function webSearch(query) {
+  if (!query) { addSys('What should I search for? Say: web search <your question>.'); return; }
+  busy = true; refresh(); const typing = addTyping();
+  try {
+    const j = await api('/api/search', { query }, 15000);
+    typing.remove();
+    const lines = j.results.length ? j.results.map((r, i) => (i + 1) + '. ' + r.title + '\n' + r.url + '\n' + r.description).join('\n\n') : 'No results found.';
+    addBubble('assistant', 'Web results for "' + j.query + '":\n\n' + lines);
+    if (settings.auto && j.results.length) speak('I found ' + j.results.length + ' results. The top one is ' + j.results[0].title);
+  } catch (e) { typing.remove(); addBubble('error', e.message); }
+  finally { busy = false; refresh(); }
+}
+
+// ---------- action cards (confirmation before anything leaves the page) ----------
+function card(title, detail, buttons, extra) {
+  const c = el('div', 'card');
+  c.appendChild(el('b', null, title));
+  if (detail) c.appendChild(el('p', null, detail));
+  if (extra) c.appendChild(extra);
+  const row = el('div', 'row');
+  buttons.forEach(([label, fn, primary, keep]) => {
+    const b = el('button', 'btn' + (primary ? ' primary' : ''), label);
+    b.onclick = () => { fn(); if (!keep) c.remove(); };
+    row.appendChild(b);
+  });
+  c.appendChild(row); $('actions').appendChild(c);
+  return c;
+}
+const openUrl = url => window.open(url, '_blank', 'noopener');
+function confirmOpen(title, detail, url) {
+  card(title, detail, [['Open', () => openUrl(url), true], ['Cancel', () => {}]]);
+}
+function copyText(text) {
+  const done = () => toast('Copied to clipboard');
+  if (navigator.clipboard && window.isSecureContext) {
+    navigator.clipboard.writeText(text).then(done).catch(() => toast('Clipboard blocked. Long-press the text to copy it.'));
+  } else {
+    const ta = el('textarea'); ta.value = text; ta.style.cssText = 'position:fixed;opacity:0'; document.body.appendChild(ta); ta.select();
+    let ok = false; try { ok = document.execCommand('copy'); } catch (e) { /* ignore */ }
+    ta.remove(); toast(ok ? 'Copied to clipboard' : 'Clipboard blocked. Long-press the text to copy it.');
+  }
+}
+function calcCard() {
+  const inp = el('input'); inp.placeholder = 'e.g. 12*(3+4)/2'; inp.inputMode = 'decimal'; inp.setAttribute('aria-label', 'Expression');
+  const out = el('p', null, 'Result appears here');
+  const wrap = el('div'); wrap.append(inp, out);
+  const calc = () => {
+    const ex = inp.value.replace(/[×x]/g, '*').replace(/÷/g, '/').replace(/\^/g, '**');
+    if (!ex.trim() || !/^[\d+\-*/().%\s]*$/.test(ex)) { out.textContent = 'Use numbers and + - * / % ( ) only.'; return; }
+    try { const v = Function('"use strict";return (' + ex + ')')(); out.textContent = Number.isFinite(v) ? '= ' + v : 'Cannot calculate that.'; }
+    catch (e) { out.textContent = 'Cannot calculate that.'; }
+  };
+  inp.addEventListener('keydown', e => { if (e.key === 'Enter') calc(); });
+  card('Calculator', null, [['Calculate', calc, true, true], ['Close', () => {}]], wrap);
+  setTimeout(() => inp.focus(), 50);
+}
+
+// ---------- notes ----------
+function renderNotes() {
+  const list = $('noteList'); list.textContent = '';
+  if (!notes.length) { list.appendChild(el('div', 'hint', 'No notes yet. Tap New note, or say "note ekak hadanna".')); return; }
+  notes.forEach(n => {
+    const box = el('div', 'note'), ta = el('textarea'); ta.value = n.text; ta.setAttribute('aria-label', 'Note');
+    ta.addEventListener('input', () => { n.text = ta.value.slice(0, 4000); LS.set('lynko.notes', notes); });
+    const row = el('div', 'row'); row.style.cssText = 'display:flex;gap:8px';
+    const cp = el('button', 'btn', 'Copy'); cp.onclick = () => copyText(n.text);
+    const del = el('button', 'btn', 'Delete'); del.onclick = () => { notes = notes.filter(x => x !== n); LS.set('lynko.notes', notes); renderNotes(); };
+    row.append(cp, del); box.append(ta, row); list.appendChild(box);
+  });
+}
+function addNote(text) {
+  notes.unshift({ id: Date.now(), text: text || '' }); LS.set('lynko.notes', notes);
+  renderNotes(); openDrawer('dNotes');
+  const first = $('noteList').querySelector('textarea'); if (first) setTimeout(() => first.focus(), 260);
+}
+
+// ---------- voice command router ----------
+const STRIP_COMMON = ['google', 'ගූගල්', 'youtube', 'යූටියුබ්', 'search', 'සර්ච්', 'open', 'කරන්න', 'karanna', 'කරපන්', 'karapan', 'play', 'whatsapp', 'වට්සැප්', 'message', 'send', 'note', 'නෝට්', 'එකක්', 'ekak', 'හදන්න', 'hadanna', 'create', 'make', 'add', 'new', 'web', 'internet', 'online', 'for', 'the', 'copy', 'කොපි'];
+const STRIP_COPY = ['මේ', 'text', 'එක', 'eka', 'this', 'me'];
+function strip(t, extra) {
+  const words = STRIP_COMMON.concat(extra || []).map(w => /^[a-z]+$/i.test(w) ? '\\b' + w + '\\b' : w);
+  return t.replace(new RegExp(words.join('|'), 'gi'), ' ').replace(/\s+/g, ' ').trim();
+}
+function route(raw) {
+  const t = raw.toLowerCase().trim();
+  const act = /(කරන්න|karanna|කරපන්|karapan|\bopen\b|\bsearch\b|\bplay\b|හදන්න|hadanna|ලියන්න|liyanna|\bcreate\b|\bmake\b|\badd\b|\bnew\b|ගන්න|ganna)/.test(t);
+  const short = t.length < 120;
+
+  if (/(stop (talking|speaking)|be quiet|shut up|කතා කරන්න එපා|katha karanna epa|nawathinna|නවත්තන)/.test(t)) {
+    stopSpeak(); addSys('Speech stopped.'); return true;
+  }
+  if (short && /(flashlight|torch|ටෝච්|ෆ්ලෑෂ්|wi-?fi|bluetooth|\bvolume\b|brightness|airplane mode)/.test(t) && (act || /\b(turn|on|off|enable|disable|increase|decrease|up|down|set)\b/.test(t))) {
+    addSys('A website cannot control the flashlight, volume, Wi-Fi, Bluetooth or other system settings. Use your phone\'s quick settings or ask the Google Assistant. I can open a Google search about it if you like.');
+    return true;
+  }
+  if (short && act && /(calculator|calculater|කැල්කියුලේටර්|කැල්කුලේටර්)/.test(t)) {
+    addSys('A browser cannot open your phone\'s calculator app, so here is a calculator inside this page.');
+    calcCard(); return true;
+  }
+  if (short && act && /(youtube|යූටියුබ්)/.test(t)) {
+    const q = strip(t);
+    confirmOpen('Open YouTube?', q ? 'Search YouTube for "' + q + '"' : 'Go to youtube.com',
+      q ? 'https://www.youtube.com/results?search_query=' + encodeURIComponent(q) : 'https://www.youtube.com/');
+    return true;
+  }
+  if (short && /(whatsapp|වට්සැප්)/.test(t) && (act || /\bsend\b/.test(t))) {
+    const msg = strip(t);
+    if (!msg) { addSys('What should the message say? Example: WhatsApp message karanna: hello machan.'); return true; }
+    confirmOpen('Send via WhatsApp?', 'WhatsApp will open with this text ready. You choose the contact and press send: "' + msg + '"', 'https://wa.me/?text=' + encodeURIComponent(msg));
+    return true;
+  }
+  if (short && /(web search|search the web|internet search|online search)/.test(t)) {
+    webSearch(strip(t)); return true;
+  }
+  if (short && act && /(google|ගූගල්)/.test(t)) {
+    const q = strip(t);
+    if (!q) { addSys('What should I search for? Say: Google search karanna <your question>.'); return true; }
+    confirmOpen('Search Google?', 'Open Google results for "' + q + '"', 'https://www.google.com/search?q=' + encodeURIComponent(q));
+    return true;
+  }
+  if (short && act && /(\bcopy\b|කොපි)/.test(t)) {
+    let target = strip(t, STRIP_COPY);
+    if (target.length < 2) { const last = [...messages].reverse().find(m => m.role === 'assistant'); target = last ? last.content : ''; }
+    if (!target) { addSys('There is nothing to copy yet.'); return true; }
+    card('Copy to clipboard?', target.slice(0, 160) + (target.length > 160 ? '…' : ''), [['Copy', () => copyText(target), true], ['Cancel', () => {}]]);
+    return true;
+  }
+  if (short && act && /(\bnote\b|නෝට්|නොට්)/.test(t)) {
+    addNote(strip(t)); addSys('New note created. You can edit it in the Notes panel.'); return true;
+  }
+  return false;
+}
+
+// ---------- input handling ----------
+function handleInput(text) {
+  text = text.trim().slice(0, 2000);
+  if (!text || busy) return;
+  stopSpeak();
+  messages.push({ role: 'user', content: text }); persist();
+  addBubble('user', text);
+  if (route(text)) return;
+  askAI();
+}
+function sendTyped() {
+  const v = $('text').value; if (!v.trim()) return;
+  $('text').value = ''; autosize(); handleInput(v);
+}
+function autosize() { const t = $('text'); t.style.height = 'auto'; t.style.height = Math.min(t.scrollHeight, 110) + 'px'; }
+
+// ---------- drawers ----------
+function openDrawer(id) {
+  document.querySelectorAll('.drawer').forEach(d => d.classList.toggle('on', d.id === id));
+  $('overlay').classList.add('on');
+  if (id === 'dHistory') renderHistory();
+}
+function closeDrawers() { document.querySelectorAll('.drawer').forEach(d => d.classList.remove('on')); $('overlay').classList.remove('on'); }
+function renderHistory() {
+  const list = $('histList'); list.textContent = '';
+  const mine = messages.filter(m => m.role === 'user').slice(-50).reverse();
+  if (!mine.length) { list.appendChild(el('div', 'hint', 'Nothing here yet. Say hello to LYNKO AI!')); return; }
+  mine.forEach(m => { const b = el('button', 'btn', m.content); b.onclick = () => { closeDrawers(); handleInput(m.content); }; list.appendChild(b); });
+}
+
+// ---------- server status ----------
+async function checkHealth() {
+  const box = $('status'), label = box.querySelector('span');
+  try {
+    const r = await fetch('/api/health', { cache: 'no-store' }); health = await r.json();
+    if (health.ai && health.ai.configured) { box.className = 'ok'; label.textContent = 'AI online · ' + health.ai.model; }
+    else { box.className = 'warn'; label.textContent = 'Server up, GEMINI_API_KEY missing'; }
+  } catch (e) { health = null; box.className = 'bad'; label.textContent = 'Server offline'; }
+  box.id = 'status';
+  $('sInfo').textContent = health ? 'Server: ' + (health.ai.configured ? 'AI configured' : 'AI key missing') + ' · Web search: ' + (health.search.configured ? 'on' : 'not configured') : 'Server is not reachable.';
+}
+
+// ---------- wiring ----------
+function init() {
+  ['Good morning, say hello', 'Google search karanna LYNKO AI', 'YouTube open karanna', 'Note ekak hadanna', 'Python wala loop eka explain karanna', 'Calculator open karanna']
+    .forEach(s => { const c = el('button', 'chip', s); c.onclick = () => handleInput(s); $('chips').appendChild(c); });
+  messages.forEach(m => addBubble(m.role === 'user' ? 'user' : 'assistant', m.content));
+
+  $('sLang').value = settings.lang; $('sRate').value = settings.rate; $('rateVal').textContent = Number(settings.rate).toFixed(1);
+  $('sAuto').checked = !!settings.auto; $('sPrompt').value = settings.prompt;
+  const save = () => LS.set('lynko.settings', settings);
+  $('sLang').onchange = e => { settings.lang = e.target.value; save(); };
+  $('sVoice').onchange = e => { settings.voice = e.target.value; save(); };
+  $('sRate').oninput = e => { settings.rate = e.target.value; $('rateVal').textContent = Number(e.target.value).toFixed(1); save(); };
+  $('sAuto').onchange = e => { settings.auto = e.target.checked; save(); if (!e.target.checked) stopSpeak(); };
+  $('sPrompt').oninput = e => { settings.prompt = e.target.value.slice(0, 1000); save(); };
+  $('sReset').onclick = () => { settings.prompt = ''; $('sPrompt').value = ''; save(); toast('Extra instructions cleared'); };
+  $('sTest').onclick = () => { if (!synth) return toast('Speech output is not supported here'); speak('Hello! Mama LYNKO AI. Oyata kohomada?'); };
+
+  $('mic').onclick = toggleMic;
+  $('send').onclick = sendTyped;
+  $('stopSpeak').onclick = () => { stopSpeak(); toast('Stopped speaking'); };
+  $('text').addEventListener('keydown', e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendTyped(); } });
+  $('text').addEventListener('input', autosize);
+  $('bSettings').onclick = () => openDrawer('dSettings');
+  $('bHistory').onclick = () => openDrawer('dHistory');
+  $('bNotes').onclick = () => { renderNotes(); openDrawer('dNotes'); };
+  $('newNote').onclick = () => addNote('');
+  $('overlay').onclick = closeDrawers;
+  document.querySelectorAll('[data-close]').forEach(b => b.onclick = closeDrawers);
+  document.addEventListener('keydown', e => { if (e.key === 'Escape') closeDrawers(); });
+  $('bClear').onclick = () => {
+    if (!messages.length && !$('chat').querySelector('.msg')) return toast('Chat is already empty');
+    if (!window.confirm('Clear this chat?')) return;
+    stopSpeak(); messages = []; persist(); $('actions').textContent = '';
+    $('chat').querySelectorAll('.msg').forEach(n => n.remove()); $('empty').style.display = '';
+  };
+  if (!SR) addSys('Voice input is not supported in this browser. You can still type, and replies can be spoken. For voice input use Chrome on Android.');
+  refresh(); checkHealth(); setInterval(checkHealth, 30000);
+}
+init();
+})();
+</script>
+</body>
+</html>
