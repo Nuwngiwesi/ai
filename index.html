@@ -350,9 +350,10 @@ async function webSearch(query) {
   try {
     const j = await api('/api/search', { query }, 15000);
     typing.remove();
-    const lines = j.results.length ? j.results.map((r, i) => (i + 1) + '. ' + r.title + '\n' + r.url + '\n' + r.description).join('\n\n') : 'No results found.';
-    addBubble('assistant', 'Web results for "' + j.query + '":\n\n' + lines);
-    if (settings.auto && j.results.length) speak('I found ' + j.results.length + ' results. The top one is ' + j.results[0].title);
+    const lines = j.results.map((r, i) => (i + 1) + '. ' + r.title + '\n' + r.url + (r.description ? '\n' + r.description : '')).join('\n\n');
+    const text = j.answer ? j.answer + (lines ? '\n\nSources:\n' + lines : '') : (lines ? 'Web results for "' + j.query + '":\n\n' + lines : 'No results found.');
+    addBubble('assistant', text);
+    if (settings.auto) { if (j.answer) speak(j.answer); else if (j.results.length) speak('I found ' + j.results.length + ' results. The top one is ' + j.results[0].title); }
   } catch (e) { typing.remove(); addBubble('error', e.message); }
   finally { busy = false; refresh(); }
 }
